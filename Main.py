@@ -1,4 +1,5 @@
 import json
+import re
 
 import networkx as nx
 import numpy as np
@@ -23,6 +24,37 @@ def load_data(path):
          G.add_edge(from_node,to_node,label=attitude)
 
       return G
+
+# def ts():
+#     with open('wikiElec.ElecBs3/wikiElec.ElecBs3.txt', 'r') as f:
+#         data=f.read()
+#         votes = re.findall(r'V\s+-?\d+\s+(\d+)', data)
+#         unique_users = set(votes)
+#         print(len(unique_users))
+
+def process_wiki(path):
+    G=nx.DiGraph()
+    edgelist=[]
+    with open(path, 'r') as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            if line.startswith("U"):
+
+                type,to_node,name=line.split()
+                # print(to_node)
+            if line.startswith("V"):
+                newline=line.split()
+                from_node=newline[2]
+                attribute=newline[1]
+                # print(from_node)
+                # print(attribute)
+                # edgelist.append((from_node,to_node,attribute))
+                G.add_edge(from_node, to_node, label=attribute)
+        return G
+
+
+
 
 def count_features(G):
    Node_feature_list=[]
@@ -98,12 +130,12 @@ def create_data(graph,edges):
             # print(type(label))
             if label == '1':
                 In_label_pos += 1
-            else:
+            if label == '-1':
                 In_label_neg += 1
         for label in Out_label:
             if label == '1':
                 Out_label_pos += 1
-            else:
+            if label == '-1':
                 Out_label_neg += 1
 
         # for feature in features:
@@ -341,9 +373,6 @@ def similarity_calculate(graph,edges):
     print(correct)
     accuracy = correct/non_zero_count
 
-
-
-
     return accuracy
 
 
@@ -354,20 +383,44 @@ def similarity_calculate(graph,edges):
 
 
 
+
+
+
 if __name__ == "__main__":
-  graph=load_data('soc-sign-epinions/soc-sign-epinions.txt')
+  # graph=load_data('soc-sign-epinions/soc-sign-epinions.txt')
   # first_node = list(graph.nodes())[1]
   # feature_list=count_features(graph)
-  edges=graph.edges(data=True)
+  # edges=graph.edges(data=True)
   # print(edges_list[0][2]['label'])
+
+  # process wiki data
+  graph_wiki=process_wiki('wikiElec.ElecBs3/wikiElec.ElecBs3.txt')
+  graph_edges=graph_wiki.edges(data=True)
+
+  # 7 features with graph_wiki
+  # data, result = create_data(graph_wiki, graph_edges)
+  # creat_model(data,result)
+  # creat_tree_model(data,result)
+  # creat_forest_model(data,result)
+
+
+  # 16 features with graph_wiki
+  # data, result = creat_triangle(graph_wiki, graph_edges)
+  # data = data['triangle_Dict'].apply(pd.Series)
+  # creat_model(data, result)
+  # creat_tree_model(data,result)
+  # creat_forest_model(data,result)
+
+  # jaccard accuracy
+  print(similarity_calculate(graph_wiki,graph_edges))
 
   # 7 features
   # data, result= create_data(graph,edges)
   # data.to_csv('data.csv', index=False)
   # result.to_csv('result.csv', index=False)
-  data = pd.read_csv('data.csv')
+  # data = pd.read_csv('data.csv')
   # print(data.keys())
-  result = pd.read_csv('result.csv')
+  # result = pd.read_csv('result.csv')
   # print(result)
   # print(data.shape)
   # print(result.shape)
@@ -392,7 +445,7 @@ if __name__ == "__main__":
   # creat_forest_model(data,result)
 
   # jaccard accuracy
-  print(similarity_calculate(graph,edges))
+  # print(similarity_calculate(graph,edges))
 
 
   # print(feature_list[10],result_list[10])
