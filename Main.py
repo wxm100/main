@@ -1,5 +1,6 @@
 import json
 import re
+import matplotlib.pyplot as plt
 
 import networkx as nx
 import numpy as np
@@ -14,47 +15,15 @@ from sklearn.tree import DecisionTreeClassifier
 from tensorflow.lite.python.util import is_frozen_graph
 
 
-def load_data(path):
+
+def load_csv_data(path):
    G=nx.DiGraph()
-   with open(path, 'r') as f:
-      for _ in range(4):
-         next(f)
-      for line in f:
-         from_node,to_node,attitude=line.split()
-         G.add_edge(from_node,to_node,label=attitude)
+   df = pd.read_csv(path, header=None)
+   for index, row in df.iterrows():
+        from_node,to_node,attitude=row[0],row[1],row[2]
+        G.add_edge(from_node,to_node,label=attitude)
 
-      return G
-
-# def ts():
-#     with open('wikiElec.ElecBs3/wikiElec.ElecBs3.txt', 'r') as f:
-#         data=f.read()
-#         votes = re.findall(r'V\s+-?\d+\s+(\d+)', data)
-#         unique_users = set(votes)
-#         print(len(unique_users))
-
-def process_wiki(path):
-    G=nx.DiGraph()
-    edgelist=[]
-    with open(path, 'r') as f:
-        for line in f:
-            if line.startswith("#"):
-                continue
-            if line.startswith("U"):
-
-                type,to_node,name=line.split()
-                # print(to_node)
-            if line.startswith("V"):
-                newline=line.split()
-                from_node=newline[2]
-                attribute=newline[1]
-                # print(from_node)
-                # print(attribute)
-                # edgelist.append((from_node,to_node,attribute))
-                G.add_edge(from_node, to_node, label=attribute)
-        return G
-
-
-
+   return G
 
 def count_features(G):
    Node_feature_list=[]
@@ -67,8 +36,6 @@ def count_features(G):
        In_label_neg=0
        Out_label_pos=0
        Out_label_neg=0
-       # print(D_out)
-       # print(Out_label)
        for label in In_label:
             if label ==1:
                In_label_pos+=1
@@ -105,8 +72,8 @@ def jaccard_similarity(graph,u,v):
         return 0
     return len(intersection) / len(union)
 
+# degree features
 def create_data(graph,edges):
-    feature_list=[]
     result_list= []
     D_in_list=[]
     D_out_list=[]
@@ -115,7 +82,6 @@ def create_data(graph,edges):
     Out_label_pos_list=[]
     Out_label_neg_list=[]
     embed_list=[]
-    # features=count_features(graph)
     for u,v,data in edges:
         embed=calculate_embeddedness(graph,u,v)
         D_in= graph.in_degree(v)
@@ -137,17 +103,6 @@ def create_data(graph,edges):
                 Out_label_pos += 1
             if label == '-1':
                 Out_label_neg += 1
-
-        # for feature in features:
-        #     # print(str(next(iter(feature))),edge[0])
-        #     if str(next(iter(feature)))== edge[0]:
-        #         D_in=feature[edge[0]]['D_in']
-        #         In_label_pos=feature[edge[0]]['In_label_pos']
-        #         In_label_neg=feature[edge[0]]['In_label_neg']
-        #     if str(next(iter(feature)))== edge[1]:
-        #         D_out=feature[edge[1]]['D_out']
-        #         Out_label_pos=feature[edge[1]]['Out_label_pos']
-        #         Out_label_neg=feature[edge[1]]['Out_label_neg']
         D_in_list.append(D_in)
         D_out_list.append(D_out)
         In_label_pos_list.append(In_label_pos)
@@ -165,6 +120,7 @@ def create_data(graph,edges):
     return data,result
 
 
+# reg model
 def creat_model(data,result):
 
     X_train, X_test, y_train, y_test = train_test_split(data, result, test_size=0.2, random_state=42)
@@ -179,22 +135,10 @@ def creat_model(data,result):
 
     accuracy = accuracy_score(y_test, y_pred)
     print("LogisticRegression_accuracy:", accuracy)
-
-def creat_svm_model(data,result):
-
-    X_train, X_test, y_train, y_test = train_test_split(data, result, test_size=0.2, random_state=42)
+    return accuracy
 
 
-    model  = SVC(kernel='linear', C=1.0, random_state=42)
-    model.fit(X_train, y_train)
-
-
-    y_pred = model.predict(X_test)
-
-
-    accuracy = accuracy_score(y_test, y_pred)
-    print("svm_accuracy:", accuracy)
-
+# tree model
 def creat_tree_model(data,result):
 
     X_train, X_test, y_train, y_test = train_test_split(data, result, test_size=0.2, random_state=42)
@@ -208,8 +152,11 @@ def creat_tree_model(data,result):
 
 
     accuracy = accuracy_score(y_test, y_pred)
-    print("tree_accuracy:", accuracy)
 
+    print("tree_accuracy:", accuracy)
+    return accuracy
+
+# random forest
 def creat_forest_model(data,result):
 
     X_train, X_test, y_train, y_test = train_test_split(data, result, test_size=0.2, random_state=42)
@@ -223,8 +170,12 @@ def creat_forest_model(data,result):
 
 
     accuracy = accuracy_score(y_test, y_pred)
-    print("forest_accuracy:", accuracy)
 
+    print("forest_accuracy:", accuracy)
+    return accuracy
+
+
+# triangle feature
 def creat_triangle(graph,edges):
     # (w → u, w → v): Positive - Positive
     # (w → u, w ← v): Positive - Positive
@@ -313,25 +264,18 @@ def creat_triangle(graph,edges):
         result_list.append(data['label'])
         triangle_feature.append([wu_wv_pp,wu_wv_pn,wu_wv_np,wu_wv_nn,wu_vw_pp,wu_vw_pn,wu_vw_np,wu_vw_nn,uw_wv_pp,uw_wv_pn,uw_wv_np,uw_wv_nn
                                  ,uw_vw_pp,uw_vw_pn,uw_vw_np,uw_vw_nn])
-    # triangle_Dict={'wu_wv_pp':wu_wv_pp,'wu_wv_pn':wu_wv_pn,'wu_wv_np':wu_wv_np,'wu_wv_nn':wu_wv_nn,'wu_vw_pp':wu_vw_pp,
-    #                'wu_vw_pn':wu_vw_pn,'wu_vw_np':wu_vw_np,'wu_vw_nn':wu_vw_nn,'uw_wv_pp':uw_wv_pp,'uw_wv_pn':uw_wv_pn,
-    #               'uw_wv_np':uw_wv_np,'uw_wv_nn':uw_wv_nn,'uw_vw_pp':uw_vw_pp,'uw_vw_pn':uw_vw_pn,'uw_vw_np':uw_vw_np,
-    #                'uw_vw_nn':uw_vw_nn}
 
     triangle_Dict={'triangle_Dict':triangle_feature}
     result_Dict={'result':result_list}
     result=pd.DataFrame(result_Dict)
     triangle_Data=pd.DataFrame(triangle_Dict)
-    # result=np.array(result)
-    # newres = np.vstack([row[0] for row in result])
-    # triangle_Data=np.array(triangle_Data)
 
     return triangle_Data,result
 
 
 # use jaccard accuracy
 def similarity_calculate(graph,edges):
-    # graph=graph.to_undirected()
+
     result_list = []
     test_list=[]
 
@@ -339,7 +283,7 @@ def similarity_calculate(graph,edges):
         nodelist = []
         simlist=[]
         valid_common_neighbors =  set(graph.predecessors(v))
-        # valid_common_neighbors = [n for n in neighbors_v if graph.has_edge(n, v)]
+
 
         for x in valid_common_neighbors:
             if x!=u:
@@ -361,10 +305,6 @@ def similarity_calculate(graph,edges):
         else:
             test_list.append(0)
         result_list.append(data['label'])
-    with open('test_list.json', 'w') as file:
-        json.dump(test_list, file)
-    with open('result_list.json', 'w') as file:
-        json.dump(result_list, file)
     print(len(test_list))
     print(len(result_list))
     correct = sum(1 for p, t in zip(test_list, result_list) if p == t)
@@ -387,68 +327,172 @@ def similarity_calculate(graph,edges):
 
 
 if __name__ == "__main__":
-  # graph=load_data('soc-sign-epinions/soc-sign-epinions.txt')
-  # first_node = list(graph.nodes())[1]
-  # feature_list=count_features(graph)
-  # edges=graph.edges(data=True)
-  # print(edges_list[0][2]['label'])
 
-  # process wiki data
-  graph_wiki=process_wiki('wikiElec.ElecBs3/wikiElec.ElecBs3.txt')
+  # load epinon data
+  graph=load_csv_data('simplified_soc-sign-epinions.csv')
+  edges=graph.edges(data=True)
+
+  # load  wiki data
+  graph_wiki=load_csv_data('simplified_wiki.csv')
   graph_edges=graph_wiki.edges(data=True)
 
-  # 7 features with graph_wiki
-  # data, result = create_data(graph_wiki, graph_edges)
-  # creat_model(data,result)
-  # creat_tree_model(data,result)
-  # creat_forest_model(data,result)
+  # load bitcoinalpha data
+  bitgraph = load_csv_data('simplified-soc-sign-bitcoinalpha.csv')
+  bitedges = bitgraph.edges(data=True)
+
+  # load bitcoinotc data
+  bitcointcgraph = load_csv_data('simplified-soc-sign-bitcoinotc.csv')
+  bitcointcedges = bitcointcgraph.edges(data=True)
+
+  # load Slashdot data
+  slashgraph=load_csv_data('simplified_soc-sign-Slashdot090221.csv')
+  slashedges = slashgraph.edges(data=True)
 
 
-  # 16 features with graph_wiki
-  # data, result = creat_triangle(graph_wiki, graph_edges)
-  # data = data['triangle_Dict'].apply(pd.Series)
-  # creat_model(data, result)
-  # creat_tree_model(data,result)
-  # creat_forest_model(data,result)
 
-  # jaccard accuracy
-  print(similarity_calculate(graph_wiki,graph_edges))
+  #  different models compare between slashdot,epinon,wikipedia
 
-  # 7 features
-  # data, result= create_data(graph,edges)
-  # data.to_csv('data.csv', index=False)
-  # result.to_csv('result.csv', index=False)
-  # data = pd.read_csv('data.csv')
-  # print(data.keys())
-  # result = pd.read_csv('result.csv')
-  # print(result)
-  # print(data.shape)
-  # print(result.shape)
-  # print("7 features")
-  # creat_model(data,result)
-  # creat_tree_model(data,result)
-  # # creat_svm_model(data,result)
-  # creat_forest_model(data,result)
+  # epinon
+  data,result=create_data(graph,edges)
+  epinon=[]
+  epinon.append(creat_model(data,result))
+  epinon_result = [creat_model(data, result), creat_tree_model(data, result), creat_forest_model(data, result),similarity_calculate(graph,edges)]
 
+  # slashdot
 
-  # 16 features
-  # data,result=creat_triangle(graph,edges)
-  # # data.to_csv('data_triangle.csv', index=False)
-  # # result.to_csv('result_triangle.csv', index=False)
-  # # print(data[:10])
-  # data=data['triangle_Dict'].apply(pd.Series)
+  data,result=create_data(slashgraph,slashedges)
+  data.to_csv('slashdot_data.csv', index=False)
+  result.to_csv('slashdot_result.csv', index=False)
+  data = pd.read_csv('slashdot_data.csv')
+  result = pd.read_csv('slashdot_result.csv')
+  slashdot_result = []
+  slashdot_result=[creat_model(data,result),creat_tree_model(data,result),creat_forest_model(data,result),similarity_calculate(slashgraph,slashedges)]
 
-  # print("triangle features")
-  # creat_model(data, result)
-  # # creat_svm_model(data,result)
-  # creat_tree_model(data,result)
-  # creat_forest_model(data,result)
+  # wikipedia
+  wiki_result=[]
+  data, result = create_data(graph_wiki, graph_edges)
+  wiki_result.append(creat_model(data,result))
 
-  # jaccard accuracy
-  # print(similarity_calculate(graph,edges))
+  wiki_result=[creat_model(data,result),creat_tree_model(data,result),creat_forest_model(data,result),similarity_calculate(graph_wiki,graph_edges)]
+#
+#
+# #   plot
+  models = ['RegModel', 'Tree Model', 'Forest Model','Jaccard similarity']
+  width = 0.25
+  x = np.arange(len(models))
 
 
-  # print(feature_list[10],result_list[10])
-  # print(type(edges_list))
+  fig, ax = plt.subplots(figsize=(10, 6))
 
 
+  ax.bar(x - width, epinon_result, width, label='Epinions')
+  ax.bar(x, wiki_result, width, label='Wikipedia')
+  ax.bar(x + width, slashdot_result, width, label='Slashdot')
+
+
+  ax.set_xlabel('Models')
+
+  ax.set_ylabel('Accuracy')
+  ax.set_title('Accuracy Comparison for Different Models and Datasets')
+
+
+  ax.set_xticks(x)
+  ax.set_xticklabels(models)
+
+
+  ax.legend()
+
+
+  plt.tight_layout()
+  plt.show()
+
+
+# get triangle result
+
+# epinon
+  epinon=[]
+  data,result=creat_triangle(graph,edges)
+  data = data['triangle_Dict'].apply(pd.Series)
+  epinon.append(creat_model(data,result))
+
+# wiki
+  wiki_result=[]
+  data, result = creat_triangle(graph_wiki, graph_edges)
+  data = data['triangle_Dict'].apply(pd.Series)
+  wiki_result.append(creat_model(data,result))
+
+# slashdot
+  slashdot_result = []
+  data, result = creat_triangle(slashgraph, slashedges)
+  data = data['triangle_Dict'].apply(pd.Series)
+  slashdot_result.append(creat_model(data,result))
+
+
+
+
+
+
+
+
+
+
+# compare between 5 different dataset
+
+    # epinon
+  data,result=create_data(graph,edges)
+  epinon=[]
+  epinon.append(creat_model(data,result))
+
+    # slashdot
+  ata,result=create_data(slashgraph,slashedges)
+  data.to_csv('slashdot_data.csv', index=False)
+  result.to_csv('slashdot_result.csv', index=False)
+  data = pd.read_csv('slashdot_data.csv')
+  result = pd.read_csv('slashdot_result.csv')
+  slashdot_result = []
+
+  slashdot_result.append(creat_model(data,result))
+
+    #wiki
+  wiki_result=[]
+  data, result = create_data(graph_wiki, graph_edges)
+  wiki_result.append(creat_model(data,result))
+
+    # bitcoinalpha
+  data,result=create_data(bitgraph,bitedges)
+  bit_res=[]
+  bit_res.append(creat_model(data,result))
+
+    # bitcointc
+
+  data,result=create_data(bitcointcgraph,bitcointcedges)
+  bitcoin_res=[]
+  bitcoin_res.append(creat_model(data,result))
+
+  categories = ['bitcointc', 'bitcoinalpha', 'wikipedia', 'slashdot', 'epinon']
+  accuracies = [bitcoin_res[0], bit_res[0], wiki_result[0], slashdot_result[0], epinon[0]]
+
+
+  x = np.arange(len(categories))
+  width = 0.6
+
+
+  fig, ax = plt.subplots(figsize=(8, 6))
+  bars = ax.bar(x, accuracies, width, color='skyblue')
+
+
+  for bar in bars:
+    yval = bar.get_height()
+    ax.text(bar.get_x() + bar.get_width()/2, yval + 0.01, round(yval, 2), ha='center', va='bottom')
+
+
+  ax.set_xlabel('Categories', fontsize=12)
+  ax.set_ylabel('Accuracy', fontsize=12)
+  ax.set_title('Accuracy Comparison Across dataset', fontsize=14)
+  ax.set_xticks(x)
+  ax.set_xticklabels(categories)
+  ax.set_ylim(0, 1)
+
+
+  plt.tight_layout()
+  plt.show()
